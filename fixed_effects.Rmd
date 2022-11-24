@@ -1,0 +1,64 @@
+---
+title: "fixed effects with industriral tech talents"
+author: "Seunghoon Yang"
+date: "2022-11-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(readxl)
+library(extrafont)
+theme_set(theme_gray(base_family='AppleGothic'))
+
+```
+
+# Load datasets
+
+
+```{r datasets}
+files_list <- list.files(path = "./", pattern = "*.xlsx")[22:25]
+df_list <- map(files_list, read_excel, skip = 1)
+
+df_list
+
+```
+
+# Data Wrangling
+
+```{r wrangling}
+
+industry_subset <- industry %>% 
+  mutate(여성비율 = `학사(여)` / 학사) %>% 
+  rename(산업별 = `산업별(1)`) %>% 
+  filter(산업별 %in% c("기계", "디스플레이", "반도체", "섬유", "자동차", "전자", "철강", "화학", "바이오ㆍ헬스"))
+
+
+```
+
+# OLS dealing with fixed effects for Panel dataset
+
+```{r conducting_regression}
+
+# conduct ols
+
+ols <- lm(학사여성비율 ~ 지역 + 산업별, data = industry_subset)
+
+# conduct fixed effects
+
+fixed <- plm(학사여성비율 ~ 지역 + 산업별, index = "시점", model = "within", data = industry_subset)
+summary(fixed)
+fixef(fixed)
+
+pFtest(fixed, ols)
+fixed2 <- plm(학사여성비율 ~ 지역 * 산업별, index = "시점", model = "within", data = industry_subset)
+summary(fixed2)
+
+
+# random effects
+
+#random <- plm(학사여성비율 ~ 지역 + 산업별, index = "시점", model = "random", data = industry_subset)
+
+
+
+```
