@@ -28,6 +28,7 @@ df_list
 
 ```{r wrangling}
 
+industry <- read_excel("total_industry.xlsx")
 industry_subset <- industry %>% 
   mutate(여성비율 = `학사(여)` / 학사) %>% 
   rename(산업별 = `산업별(1)`) %>% 

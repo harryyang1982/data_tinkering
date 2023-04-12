@@ -1,0 +1,226 @@
+---
+title: "edustat"
+author: "Seunghoon Yang"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+  pdf_document:
+    extra_dependencies: kotex
+  word_document: default
+---
+
+Load Packages
+
+```{r initial, echo = TRUE, message = FALSE}
+library(tidyverse)
+library(readxl)
+library(plm)
+library(modelr)
+library(stargazer)
+
+```
+
+Load Datasets
+
+```{r load_df}
+
+edustat <- read_rds("edu_datasets/joined_data.rds") %>% 
+  mutate(입학자중여자 = 입학자_전체_여 / 입학자_전체_계) %>% 
+  select(year = 연도, 
+         univtype = 학제, 
+         region = 시도, 
+         category1 = 대계열,
+         major = 학과명,
+         prop_women_employ = 취업자중여자,
+         shipbuilding,
+         eng)
+
+
+```
+
+### Conducting OLS
+
+```{r c_a, results="asis"}
+
+# conduct ols
+
+# 조선관련 학과 여부에 따른 취업자 중 여학생 비율
+ols <- lm(prop_women_employ ~ shipbuilding + region, data = edustat)
+summary(ols)
+
+
+# 공학계열 여부에 따른 취업자 중 여학생 비율
+ols2 <- lm(prop_women_employ ~ eng + region, data = edustat)
+summary(ols2)
+
+# 계열과 지역(서울/경남/부산/울산, 경남이 default)에 따른 취업자 중 여학생 비율
+ols3 <- lm(prop_women_employ ~ region + category1, data = edustat)
+summary(ols3)
+
+stargazer(ols, ols2, ols3, type = "html")
+
+
+```
+
+### Conducting Fixed Effects
+
+``` {r f_e_a}
+
+fixed <- plm(prop_women_employ ~ factor(eng) + region, index = "year", model = "within", data = edustat)
+
+summary(fixed)
+fixef(fixed)
+
+fixed2 <- plm(prop_women_employ ~ factor(shipbuilding) + region, index = "year", model = "within", data = edustat)
+summary(fixed2)
+fixef(fixed2)
+
+fixed3 <- plm(prop_women_employ ~ category1, index = c("year", "region"), model = "within", data = edustat)
+summary(fixed3)
+fixef(fixed3)
+
+fixed4 <- plm(prop_women_employ ~ category1 + region, index = "year", model = "within", data = edustat)
+summary(fixed3)
+fixef(fixed3)
+
+
+pFtest(fixed, ols)
+pFtest(fixed2, ols2)
+pFtest(fixed3, ols3)
+
+```
+
+There are few differences of results among ols, fixed-effects, and random-effects.
+
+### Random Effects
+
+```{r random_effects}
+
+random1 <- plm(prop_women_employ ~ category1, index = c("year", "region"), model = "random", data = edustat)
+summary(random1)
+
+```
+
+### Only conducting analysis with '공학계열'
+
+```{r only_eng}
+
+edustat2 <- edustat %>% 
+  filter(category1 %in% c("공학계열"))
+
+ols4 <- lm(prop_women_employ ~ region, data = edustat2)
+summary(ols4)
+
+
+```
+
+### 학력별 분석
+
+```{r tech_to_grad}
+
+# 전문대
+
+ols_technical <- lm(prop_women_employ ~ category1 + region, data = edustat %>% filter(univtype %in% c("전문대학(2년제)", "전문대학(3년제)", "전문대학(4년제)", "기능대학")))
+summary(ols_technical)
+
+ols_technical_ship <- lm(prop_women_employ ~ category1 + region + shipbuilding, data = edustat %>% filter(univtype %in% c("전문대학(2년제)", "전문대학(3년제)", "전문대학(4년제)", "기능대학")))
+summary(ols_technical_ship)
+
+fixed_technical_eng <- plm(prop_women_employ ~ factor(eng) + region, index = "year", model = "within", data = edustat %>% filter(univtype %in% c("전문대학(2년제)", "전문대학(3년제)", "전문대학(4년제)", "기능대학")))
+summary(fixed_technical_eng)
+
+fixed_technical_ship <- plm(prop_women_employ ~ factor(shipbuilding) + region, index = "year", model = "within", data = edustat %>% filter(univtype %in% c("전문대학(2년제)", "전문대학(3년제)", "전문대학(4년제)", "기능대학")))
+summary(fixed_technical_ship)
+
+# 학사
+
+ols_undergraduate <- lm(prop_women_employ ~ category1 + region, data = edustat %>% filter(univtype == "대학교"))
+summary(ols_undergraduate)
+
+## 학사 조선관련 학과
+ols_undergraduate_ship <- lm(prop_women_employ ~ category1 + region + shipbuilding, data = edustat %>% filter(univtype == "대학교"))
+summary(ols_undergraduate_ship)
+
+## fixed effects with eng factor
+fixed_undergrad_eng <- plm(prop_women_employ ~ factor(eng) + region, index = "year", model = "within", data = edustat %>% filter(univtype == "대학교"))
+summary(fixed_undergrad_eng)
+
+## fixed effects with shipbuilding factor
+fixed_undergrad_ship <- plm(prop_women_employ ~ factor(shipbuilding) + region, index = "year", model = "within", data = edustat %>% filter(univtype == "대학교"))
+summary(fixed_undergrad_ship)
+
+# 대학원
+
+ols_graduate <- ols_technical <- lm(prop_women_employ ~ category1 + region, data = edustat %>% filter(univtype == "일반대학원"))
+summary(ols_graduate)
+
+## 대학원 조선관련 학과
+ols_graduate_ship <- ols_technical <- lm(prop_women_employ ~ category1 + region + shipbuilding, data = edustat %>% filter(univtype == "일반대학원"))
+summary(ols_graduate_ship)
+
+## fixed effects with eng factor 
+fixed_grad_eng <- plm(prop_women_employ ~ factor(eng) + region, index = "year", model = "within", data = edustat %>% filter(univtype == "일반대학원"))
+summary(fixed_grad_eng)
+
+## fixed effects with shipbuilding factor 
+fixed_grad_ship <- plm(prop_women_employ ~ factor(shipbuilding) + region, index = "year", model = "within", data = edustat %>% filter(univtype == "일반대학원"))
+summary(fixed_grad_ship)
+
+```
+
+### 다 합쳐서
+
+```{r total_ana}
+
+## 합쳐서 
+
+edustat %>% 
+  mutate(school_age = case_when(univtype %in% c("전문대학(2년제)", "전문대학(3년제)", "전문대학(4년제)", "기능대학") ~ "전문대학",
+                                univtype == "대학교" ~ univtype,
+                                univtype == "일반대학원" ~ univtype)) -> edustat3
+
+total_analysis <- plm(prop_women_employ ~ category1 + region + school_age, index = "year", model = "within", data = edustat3)
+summary(total_analysis)
+
+total_analysis2 <- plm(prop_women_employ ~ category1 * region * school_age, index = "year", model = "within", data = edustat3)
+summary(total_analysis2)
+
+```
+
+### 공학만
+
+```{r eng_ana}
+
+eng_analysis <- plm(prop_women_employ ~ region + school_age, index = "year", model = "within", data = edustat3 %>% filter(category1 == "공학계열"))
+summary(eng_analysis)
+
+
+eng_analysis2 <- plm(prop_women_employ ~ region * school_age, index = "year", model = "within", data = edustat3 %>% filter(category1 == "공학계열"))
+summary(eng_analysis2)
+
+```
+
+### 조선공학만
+
+```{r ship_ana}
+
+ship_analysis1 <- plm(prop_women_employ ~ region + school_age, index = "year", model = "within", data = edustat3 %>% filter(shipbuilding == 1))
+summary(ship_analysis1)
+
+ship_analysis2 <- plm(prop_women_employ ~ region * school_age, index = "year", model = "within", data = edustat3 %>% filter(shipbuilding == 1))
+summary(ship_analysis2)
+```
+
+### 자연계열
+
+```{r sci_ana}
+
+sci_analysis <- plm(prop_women_employ ~ region + school_age, index = "year", model = "within", data = edustat3 %>% filter(category1 == "자연계열"))
+summary(sci_analysis)
+
+
+sci_analysis2 <- plm(prop_women_employ ~ region * school_age, index = "year", model = "within", data = edustat3 %>% filter(category1 == "자연계열"))
+summary(sci_analysis2)
+
+```
